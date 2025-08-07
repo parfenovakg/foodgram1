@@ -1,62 +1,52 @@
-from rest_framework import viewsets, permissions
-from rest_framework.decorators import action
+from rest_framework import viewsets, status
 from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from .models import Recipe, Tag, Ingredient, Favorite, ShoppingCart
-from .serializers import RecipeSerializer, TagSerializer, IngredientSerializer, FavoriteSerializer, ShoppingCartSerializer
-from django.shortcuts import render
-from django.core.paginator import Paginator
-from .models import Recipe, Tag
+from .serializers import RecipeSerializer, TagSerializer, IngredientSerializer
+from users.serializers import CustomUserSerializer
 
-class RecipeViewSet(viewsets.ModelViewSet):
-    """Вьюсет для работы с рецептами."""
-    queryset = Recipe.objects.all()
-    serializer_class = RecipeSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-
-    @action(detail=True, methods=['post', 'delete'])
-    def favorite(self, request, pk=None):
-        """Добавление и удаление рецепта из избранного."""
-        recipe = self.get_object()
-        if request.method == 'POST':
-            Favorite.objects.get_or_create(user=request.user, recipe=recipe)
-            return Response({'status': 'added to favorites'})
-        Favorite.objects.filter(user=request.user, recipe=recipe).delete()
-        return Response({'status': 'removed from favorites'})
-
-    @action(detail=True, methods=['post', 'delete'])
-    def shopping_cart(self, request, pk=None):
-        """Добавление и удаление рецепта из списка покупок."""
-        recipe = self.get_object()
-        if request.method == 'POST':
-            ShoppingCart.objects.get_or_create(user=request.user, recipe=recipe)
-            return Response({'status': 'added to shopping cart'})
-        ShoppingCart.objects.filter(user=request.user, recipe=recipe).delete()
-        return Response({'status': 'removed from shopping cart'})
-
-class TagViewSet(viewsets.ModelViewSet):
-    """Вьюсет для тегов."""
+class TagViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
-    permission_classes = [permissions.AllowAny]
 
-class IngredientViewSet(viewsets.ModelViewSet):
-    """Вьюсет для ингредиентов."""
+class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
-    permission_classes = [permissions.AllowAny]
+    filterset_fields = ('name',)
 
+class RecipeViewSet(viewsets.ModelViewSet):
+    queryset = Recipe.objects.all()
+    serializer_class = RecipeSerializer
+    permission_classes = (IsAuthenticatedOrReadOnly,)
 
-def index(request):
-    """Главная страница с отображением рецептов и фильтрацией по тегам."""
-    tag_filter = request.GET.getlist('tags')  # Получаем выбранные теги из URL
-    recipes = Recipe.objects.all()
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
 
-    if tag_filter:
-        recipes = recipes.filter(tags__slug__in=tag_filter).distinct()
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticatedOrReadOnly])
+    def favorite(self, request, pk=None):
+        user = request.user
+        recipe = self.get_object()
+        Favorite.objects.get_or_create(user=user, recipe=recipe)
+        return Response({'status': 'added to favorites'}, status=status.HTTP_201_CREATED)
 
-    paginator = Paginator(recipes, 6)  # Показываем по 6 рецептов на странице
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    @favorite.mapping.delete
+    def unfavorite(self, request, pk=None):
+        user = request.user
+        recipe = self.get_object()
+        Favorite.objects.filter(user=user, recipe=recipe).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-    tags = Tag.objects.all()
-    return render(request, 'index.html', {'page_obj': page_obj, 'tags': tags})
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticatedOrReadOnly])
+    def shopping_cart(self, request, pk=None):
+        user = request.user
+        recipe = self.get_object()
+        ShoppingCart.objects.get_or_create(user=user, recipe=recipe)
+        return Response({'status': 'added to shopping cart'}, status=status.HTTP_201_CREATED)
+
+    @shopping_cart.mapping.delete
+    def remove_shopping_cart(self, request, pk=None):
+        user = request.user
+        recipe = self.get_object()
+        ShoppingCart.objects.filter(user=user, recipe=recipe).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.utils.crypto import get_random_string
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -14,7 +16,7 @@ class Tag(models.Model):
 
 
 class Ingredient(models.Model):
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, db_index=True)
     measurement_unit = models.CharField(max_length=200)
 
     class Meta:
@@ -37,9 +39,20 @@ class Recipe(models.Model):
     )
     tags = models.ManyToManyField(Tag, related_name='recipes')
     cooking_time = models.PositiveIntegerField()
+    short_code = models.CharField(max_length=10, default='TEMP', unique=True, editable=False)
+    pub_date = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-pub_date']
+
+    def save(self, *args, **kwargs):
+        if not self.short_code:
+            self.short_code = get_random_string(8)
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
+
 
 class RecipeIngredient(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='recipe_ingredients')
@@ -64,4 +77,3 @@ class ShoppingCart(models.Model):
 
     class Meta:
         unique_together = ('user', 'recipe')
-

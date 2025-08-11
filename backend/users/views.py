@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from .models import CustomUser, Follow
-from .serializers import CustomUserSerializer
+from .serializers import CustomUserSerializer, SubscriptionSerializer
 
 from django.core.files.base import ContentFile
 import base64
@@ -29,7 +29,7 @@ class AvatarSerializer(serializers.ModelSerializer):
         fields = ('avatar',)
 
 
-class UserViewSet(viewsets.ModelViewSet): 
+class UserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = CustomUserSerializer
 
@@ -37,15 +37,52 @@ class UserViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return [AllowAny()]
         return super().get_permissions()
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        serializer = self.get_serializer(request.user)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def set_password(self, request):
+        user = request.user
+        current_password = request.data.get('current_password')
+        new_password = request.data.get('new_password')
+        
+        if not current_password or not new_password:
+            return Response(
+                {'error': 'Both current_password and new_password are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        if not user.check_password(current_password):
+            return Response(
+                {'error': 'Current password is incorrect'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        user.set_password(new_password)
+        user.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post', 'delete'], permission_classes=[IsAuthenticated])
     def subscribe(self, request, pk=None):
         author = self.get_object()
         if author == request.user:
-            return Response({'detail': 'Нельзя подписаться на себя.'}, status=400)
+            return Response({'detail': 'You cannot subscribe to yourself.'}, status=400)
+        
         if request.method == 'POST':
-            Follow.objects.get_or_create(user=request.user, author=author)
-            return Response(status=201)
+            # Check if already subscribed
+            if Follow.objects.filter(user=request.user, author=author).exists():
+                return Response({'detail': 'You are already subscribed to this user.'}, status=400)
+                
+            Follow.objects.create(user=request.user, author=author)
+            serializer = SubscriptionSerializer(
+                author,
+                context={'request': request}
+            )
+            return Response(serializer.data, status=201)
+            
         Follow.objects.filter(user=request.user, author=author).delete()
         return Response(status=204)
 
@@ -53,8 +90,12 @@ class UserViewSet(viewsets.ModelViewSet):
     def subscriptions(self, request):
         authors = CustomUser.objects.filter(following__user=request.user).distinct()
         page = self.paginate_queryset(authors)
-        ser = self.get_serializer(page, many=True, context={'request': request})
-        return self.get_paginated_response(ser.data)
+        serializer = SubscriptionSerializer(
+            page,
+            many=True,
+            context={'request': request}
+        )
+        return self.get_paginated_response(serializer.data)
 
     @action(detail=False, methods=['patch', 'delete'], permission_classes=[IsAuthenticated], url_path='me/avatar')
     def me_avatar(self, request):

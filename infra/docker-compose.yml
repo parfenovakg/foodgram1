@@ -14,7 +14,17 @@ services:
   backend_migrations:
     build:
       context: ../backend
-    command: python3 manage.py migrate
+    command: >
+      bash -c "
+      python3 manage.py migrate &&
+      python3 manage.py create_test_users --count 10 &&
+      python3 manage.py create_test_tags &&
+      python3 manage.py create_test_ingredients &&
+      python3 manage.py create_test_recipes --count 20 &&
+      python3 manage.py create_test_follows --min-follows 1 --max-follows 5 &&
+      python3 manage.py create_test_favorites --min-favorites 1 --max-favorites 5 &&
+      python3 manage.py create_test_shopping_carts --min-items 1 --max-items 3
+      "
     volumes:
       - ../backend/media:/app/media
       - ../backend/staticfiles:/app/static

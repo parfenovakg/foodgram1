@@ -6,7 +6,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-3bism+&ui9t%3v$5hhy(skf_c2-g0xql7c+_4az^zqjd^rke4_'
 DEBUG = True
 ALLOWED_HOSTS = ['*']
-
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost',
+    'http://localhost:8000',
+    'http://localhost:80'
+    'http://127.0.0.1',
+    'http://127.0.0.1:8000',
+    'http://127.0.0.1:80',
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -67,7 +74,7 @@ PG_DATABASE_SETTINGS = {
     'NAME': os.getenv('DB_NAME', ''),
     'USER': os.getenv('DB_USER', ''),
     'PASSWORD': os.getenv('DB_PASSWORD', ''),
-    'PORT': int(os.getenv('DB_PORT')) or 5432,
+    'PORT': int(os.getenv('DB_PORT', '5432')),
 }
 
 SQLITE_DATABASE_SETTINGS = {

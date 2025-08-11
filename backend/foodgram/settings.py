@@ -5,7 +5,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-3bism+&ui9t%3v$5hhy(skf_c2-g0xql7c+_4az^zqjd^rke4_'
 DEBUG = True
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 INSTALLED_APPS = [
@@ -59,11 +59,24 @@ TEMPLATES = [
 WSGI_APPLICATION = 'foodgram.wsgi.application'
 
 
+ENABLE_PG_DATABASE = os.getenv('DB_ENABLE_PG', '') == 'true'
+
+PG_DATABASE_SETTINGS = {
+    'ENGINE': 'django.db.backends.postgresql',
+    'HOST': os.getenv('DB_HOST', ''),
+    'NAME': os.getenv('DB_NAME', ''),
+    'USER': os.getenv('DB_USER', ''),
+    'PASSWORD': os.getenv('DB_PASSWORD', ''),
+    'PORT': int(os.getenv('DB_PORT')) or 5432,
+}
+
+SQLITE_DATABASE_SETTINGS = {
+    'ENGINE': 'django.db.backends.sqlite3',
+    'NAME': BASE_DIR / 'db.sqlite3',
+}
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': PG_DATABASE_SETTINGS if ENABLE_PG_DATABASE else SQLITE_DATABASE_SETTINGS,
 }
 
 

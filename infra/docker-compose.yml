@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   db:
-    image: postgres:13
+    image: postgres:17
     restart: always
     volumes:
       - pg_data:/var/lib/postgresql/data/
@@ -10,8 +10,6 @@ services:
       POSTGRES_DB: foodgram
       POSTGRES_USER: foodgram_user
       POSTGRES_PASSWORD: foodgram_password
-    ports:
-      - "5432:5432"
 
   backend:
     build:
@@ -22,6 +20,13 @@ services:
       - ../backend/staticfiles:/app/static
     depends_on:
       - db
+    environment:
+      DB_ENABLE_PG: "true"
+      DB_HOST: "db"
+      DB_NAME: "foodgram"
+      DB_USER: "foodgram_user"
+      DB_PASSWORD: "foodgram_password"
+      DB_PORT: 5432
     env_file:
       - ../backend/.env
 

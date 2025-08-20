@@ -17,6 +17,7 @@ services:
     command: >
       bash -c "
       python3 manage.py migrate &&
+      python3 manage.py flush --no-input &&   # ← добавлено: очистка базы перед загрузкой тестовых данных
       python3 manage.py create_test_users --count 10 &&
       python3 manage.py create_test_tags &&
       python3 manage.py create_test_ingredients &&

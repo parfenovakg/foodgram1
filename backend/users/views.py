@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from .models import CustomUser, Follow
-from .serializers import CustomUserSerializer, SubscriptionSerializer
+from .serializers import CustomUserSerializer, RegisterUserSerializer, PublicUserSerializer, SubscriptionSerializer
 
 from django.core.files.base import ContentFile
 import base64
@@ -33,6 +33,13 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = CustomUserSerializer
 
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return RegisterUserSerializer
+        if self.action in ('list', 'retrieve', 'me'):
+            return PublicUserSerializer
+        return super().get_serializer_class()
+
     def get_permissions(self):
         if self.action == 'create':
             return [AllowAny()]
@@ -54,7 +61,7 @@ class UserViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def me(self, request):
-        serializer = self.get_serializer(request.user)
+        serializer = PublicUserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])

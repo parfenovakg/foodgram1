@@ -18,12 +18,32 @@ class CustomUserSerializer(serializers.ModelSerializer):
         return Follow.objects.filter(user=request.user, author=obj).exists()
 
 
+class RegisterUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ("id", "username", "first_name", "last_name", "email")
+
+class PublicUserSerializer(serializers.ModelSerializer):
+    is_subscribed = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomUser
+        fields = ("id", "username", "first_name", "last_name", "email", "is_subscribed")
+
+    def get_is_subscribed(self, obj):
+        request = self.context.get('request')
+        if not request or request.user.is_anonymous:
+            return False
+        return Follow.objects.filter(user=request.user, author=obj).exists()
+
+
 class RecipeMinSerializer(serializers.ModelSerializer):
     """Simplified recipe serializer for subscription responses"""
     
     class Meta:
         model = Recipe
         fields = ('id', 'name', 'image', 'cooking_time')
+
 
 
 class SubscriptionSerializer(CustomUserSerializer):

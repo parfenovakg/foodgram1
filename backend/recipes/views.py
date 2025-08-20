@@ -11,7 +11,7 @@ from rest_framework.permissions import BasePermission, SAFE_METHODS
 from .models import Recipe, Tag, Ingredient, Favorite, ShoppingCart, RecipeIngredient
 from .serializers import (
     RecipeReadSerializer, RecipeWriteSerializer,
-    TagSerializer, IngredientSerializer
+    TagSerializer, IngredientSerializer, RecipeReadNoShortLinkSerializer
 )
 from .filters import RecipeFilter
 
@@ -27,12 +27,21 @@ class IsAuthorOrReadOnly(BasePermission):
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
+    pagination_class = None
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
-    
+
+    def list(self, request, *args, **kwargs):
+        page = self.paginate_queryset(self.get_queryset())
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return Response(serializer.data)  # массив, без обёртки
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+        return Response(serializer.data)
+        
     def get_queryset(self):
         queryset = super().get_queryset()
         name = self.request.query_params.get('name')
@@ -51,7 +60,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):
             return RecipeWriteSerializer
+        if self.action == 'list':
+            return RecipeReadNoShortLinkSerializer
         return RecipeReadSerializer
+
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)

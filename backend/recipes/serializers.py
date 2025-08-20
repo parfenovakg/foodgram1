@@ -2,11 +2,14 @@ from rest_framework import serializers
 from django.db import transaction
 from django.urls import reverse
 from django.core.files.base import ContentFile
+from django.db.models import Max
+from django.db.models.functions import Cast
+from django.db.models import IntegerField
 import base64
 import imghdr
 
 from .models import Tag, Ingredient, Recipe, RecipeIngredient, Favorite, ShoppingCart
-from users.serializers import CustomUserSerializer
+from users.serializers import PublicUserSerializer
 
 
 class Base64ImageField(serializers.ImageField):
@@ -51,7 +54,7 @@ class IngredientInRecipeReadSerializer(serializers.ModelSerializer):
 
 class RecipeReadSerializer(serializers.ModelSerializer):
     tags = TagSerializer(many=True)
-    author = CustomUserSerializer(read_only=True)
+    author = PublicUserSerializer(read_only=True)
     ingredients = IngredientInRecipeReadSerializer(source='recipe_ingredients', many=True)
     image = Base64ImageField()
     is_favorited = serializers.SerializerMethodField()
@@ -105,11 +108,34 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         ]
         RecipeIngredient.objects.bulk_create(objs)
 
+    # @transaction.atomic
+    # def create(self, validated_data):
+    #     tags = validated_data.pop('tags')
+    #     ingredients = validated_data.pop('ingredients')
+    #     #recipe = Recipe.objects.create(author=self.context['request'].user, **validated_data)
+    #     recipe = Recipe.objects.create(**validated_data)
+    #     self._set_m2m(recipe, tags, ingredients)
+    #     return recipe
+
     @transaction.atomic
     def create(self, validated_data):
         tags = validated_data.pop('tags')
         ingredients = validated_data.pop('ingredients')
-        recipe = Recipe.objects.create(author=self.context['request'].user, **validated_data)
+
+        # Берём максимум только по тем short_code, что являются числами
+        last_code = (
+            Recipe.objects
+            .filter(short_code__regex=r'^\d+$')              # только цифры
+            .annotate(code_int=Cast('short_code', IntegerField()))
+            .aggregate(max_code=Max('code_int'))
+            .get('max_code') or 0
+        )
+        next_code = str(last_code + 1).zfill(3)
+
+        validated_data['short_code'] = next_code
+        validated_data['author'] = self.context['request'].user
+
+        recipe = Recipe.objects.create(**validated_data)
         self._set_m2m(recipe, tags, ingredients)
         return recipe
 
@@ -129,3 +155,10 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         return RecipeReadSerializer(instance, context=self.context).data
+
+    
+
+class RecipeReadNoShortLinkSerializer(RecipeReadSerializer):
+    class Meta(RecipeReadSerializer.Meta):
+        fields = tuple(f for f in RecipeReadSerializer.Meta.fields if f != 'short_link')
+

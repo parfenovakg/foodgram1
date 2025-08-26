@@ -1,5 +1,6 @@
 from django.db.models import Sum, F
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -53,35 +54,92 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
-    queryset = Recipe.objects.select_related('author').prefetch_related('tags', 'recipe_ingredients__ingredient')
+    queryset = Recipe.objects.select_related('author').prefetch_related(
+        'tags', 'recipe_ingredients__ingredient'
+    )
     permission_classes = (IsAuthorOrReadOnly,)
     filterset_class = RecipeFilter
 
     def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):
             return RecipeWriteSerializer
-        if self.action == 'list':
+        if self.action in ('list', 'favorite', 'shopping_cart', 'retrieve'):
             return RecipeReadNoShortLinkSerializer
         return RecipeReadSerializer
-
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
 
+    def create(self, request, *args, **kwargs):
+        data = request.data
+
+        if not request.user.is_authenticated:
+            return Response({'detail': 'Authentication credentials were not provided.'},
+                            status=status.HTTP_401_UNAUTHORIZED)
+
+        # Duplicate ingredients
+        ids = [str(i.get('id') or i.get('ingredient')) for i in data.get('ingredients', [])]
+        if len(ids) != len(set(ids)):
+            return Response({'ingredients': 'Ingredients must not be duplicated'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Duplicate tags
+        tags = data.get('tags') or []
+        if len(tags) != len(set(tags)):
+            return Response({'tags': 'Tags must not be duplicated'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Cooking time check
+        if str(data.get('cooking_time')).isdigit() and int(data.get('cooking_time')) < 1:
+            return Response({'cooking_time': 'Minimum cooking time is 1 minute'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        data = request.data
+
+        # Проверка ингредиентов до поиска рецепта
+        if not data.get('ingredients'):
+            return Response({'ingredients': 'At least one ingredient is required'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        ids = [str(i.get('id') or i.get('ingredient')) for i in data['ingredients']]
+        if len(ids) != len(set(ids)):
+            return Response({'ingredients': 'Ingredients must not be duplicated'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        tags = data.get('tags') or []
+        if len(tags) != len(set(tags)):
+            return Response({'tags': 'Tags must not be duplicated'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if str(data.get('cooking_time')).isdigit() and int(data.get('cooking_time')) < 1:
+            return Response({'cooking_time': 'Minimum cooking time is 1 minute'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Теперь проверка существования рецепта
+        recipe = Recipe.objects.filter(pk=kwargs.get('pk')).first()
+        if not recipe:
+            return Response({'detail': 'Рецепта с таким ID не существует'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        # Поведение идентично update
+        return self.update(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def favorite(self, request, pk=None):
-        recipe = self.get_object()
-        
-        # Check if already in favorites
+        recipe = Recipe.objects.filter(pk=pk).first()
+        if recipe is None:
+            return Response({'errors': 'Recipe with this ID does not exist'},
+                            status=status.HTTP_400_BAD_REQUEST)
         if Favorite.objects.filter(user=request.user, recipe=recipe).exists():
-            return Response(
-                {'errors': 'Recipe is already in favorites'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
+            return Response({'errors': 'Recipe is already in favorites'},
+                            status=status.HTTP_400_BAD_REQUEST)
         Favorite.objects.create(user=request.user, recipe=recipe)
-        
-        # Return simplified recipe representation
         data = {
             'id': recipe.id,
             'name': recipe.name,
@@ -92,32 +150,24 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     @favorite.mapping.delete
     def unfavorite(self, request, pk=None):
-        recipe = self.get_object()
+        recipe = get_object_or_404(Recipe, pk=pk)
         favorite = Favorite.objects.filter(user=request.user, recipe=recipe)
-        
         if not favorite.exists():
-            return Response(
-                {'errors': 'Recipe is not in favorites'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
+            return Response({'errors': 'Recipe is not in favorites'},
+                            status=status.HTTP_400_BAD_REQUEST)
         favorite.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def shopping_cart(self, request, pk=None):
-        recipe = self.get_object()
-        
-        # Check if already in shopping cart
+        recipe = Recipe.objects.filter(pk=pk).first()
+        if recipe is None:
+            return Response({'errors': 'Recipe with this ID does not exist'},
+                            status=status.HTTP_400_BAD_REQUEST)
         if ShoppingCart.objects.filter(user=request.user, recipe=recipe).exists():
-            return Response(
-                {'errors': 'Recipe is already in shopping cart'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
+            return Response({'errors': 'Recipe is already in shopping cart'},
+                            status=status.HTTP_400_BAD_REQUEST)
         ShoppingCart.objects.create(user=request.user, recipe=recipe)
-        
-        # Return simplified recipe representation
         data = {
             'id': recipe.id,
             'name': recipe.name,
@@ -130,13 +180,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def remove_shopping_cart(self, request, pk=None):
         recipe = self.get_object()
         cart_item = ShoppingCart.objects.filter(user=request.user, recipe=recipe)
-        
         if not cart_item.exists():
-            return Response(
-                {'errors': 'Recipe is not in shopping cart'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
+            return Response({'errors': 'Recipe is not in shopping cart'},
+                            status=status.HTTP_400_BAD_REQUEST)
         cart_item.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -152,6 +198,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
         )
         lines = [f"{i['name']} ({i['unit']}) — {i['total']}" for i in items]
         content = '\n'.join(lines) if lines else 'Список пуст.'
-        resp = HttpResponse(content, content_type='text/plain; charset=utf-8')
-        resp['Content-Disposition'] = 'attachment; filename="shopping_list.txt"'
-        return resp
+
+        response = HttpResponse(
+            content,
+            content_type='text/plain; charset=utf-8'
+        )
+        response['Content-Disposition'] = 'attachment; filename="shopping_list.txt"'
+        return response

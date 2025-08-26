@@ -103,6 +103,15 @@ class UserViewSet(viewsets.ModelViewSet):
                 context={'request': request}
             )
             return Response(serializer.data, status=201)
+        if request.method == 'DELETE':
+            follow_qs = Follow.objects.filter(user=request.user, author=author)
+            if not follow_qs.exists():
+                return Response(
+                    {'detail': 'Подписки не существует'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            follow_qs.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
             
         Follow.objects.filter(user=request.user, author=author).delete()
         return Response(status=204)

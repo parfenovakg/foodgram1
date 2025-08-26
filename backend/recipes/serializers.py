@@ -36,6 +36,7 @@ class IngredientSerializer(serializers.ModelSerializer):
 
 class IngredientInRecipeWriteSerializer(serializers.ModelSerializer):
     id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all(), source='ingredient')
+    amount = serializers.IntegerField(min_value=1)
 
     class Meta:
         model = RecipeIngredient
@@ -60,6 +61,7 @@ class RecipeReadSerializer(serializers.ModelSerializer):
     is_favorited = serializers.SerializerMethodField()
     is_in_shopping_cart = serializers.SerializerMethodField()
     short_link = serializers.SerializerMethodField()
+    
 
     class Meta:
         model = Recipe
@@ -154,7 +156,8 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         return instance
 
     def to_representation(self, instance):
-        return RecipeReadSerializer(instance, context=self.context).data
+        return RecipeReadNoShortLinkSerializer(instance, context=self.context).data
+
 
     
 

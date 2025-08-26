@@ -34,15 +34,8 @@ class TagViewSet(viewsets.ReadOnlyModelViewSet):
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
+    pagination_class = None
 
-    def list(self, request, *args, **kwargs):
-        page = self.paginate_queryset(self.get_queryset())
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return Response(serializer.data)  # массив, без обёртки
-        serializer = self.get_serializer(self.get_queryset(), many=True)
-        return Response(serializer.data)
-        
     def get_queryset(self):
         queryset = super().get_queryset()
         name = self.request.query_params.get('name')

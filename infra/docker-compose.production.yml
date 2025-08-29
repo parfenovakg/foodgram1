@@ -12,12 +12,11 @@ services:
       POSTGRES_PASSWORD: foodgram_password
 
   backend_migrations:
-    build:
-      context: ../backend
+    image: parfenovakg/infra-backend:latest
     command: >
       bash -c "
       python3 manage.py migrate &&
-      python3 manage.py flush --no-input &&   # ← добавлено: очистка базы перед загрузкой тестовых данных
+      python3 manage.py flush --no-input &&   
       python3 manage.py create_test_users --count 10 &&
       python3 manage.py create_test_tags &&
       python3 manage.py create_test_ingredients &&
@@ -42,8 +41,7 @@ services:
       - ../backend/.env
 
   backend:
-    build:
-      context: ../backend
+    image: parfenovakg/infra-backend:latest
     command: gunicorn foodgram.wsgi:application --bind 0.0.0.0:8000
     restart: always
     volumes:
@@ -62,10 +60,8 @@ services:
     env_file:
       - ../backend/.env
 
-
   frontend:
-    build:
-      context: ../frontend
+    image: parfenovakg/infra-frontend:latest
     volumes:
       - frontend_static:/build_result
 
@@ -84,4 +80,3 @@ services:
 volumes:
   pg_data:
   frontend_static:
-  

@@ -8,7 +8,9 @@ from django.db.models import IntegerField
 import base64
 import imghdr
 
-from .models import Tag, Ingredient, Recipe, RecipeIngredient, Favorite, ShoppingCart
+from .models import (Tag, Ingredient,
+                     Recipe, RecipeIngredient,
+                     Favorite, ShoppingCart)
 from users.serializers import PublicUserSerializer
 
 
@@ -35,7 +37,8 @@ class IngredientSerializer(serializers.ModelSerializer):
 
 
 class IngredientInRecipeWriteSerializer(serializers.ModelSerializer):
-    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all(), source='ingredient')
+    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all(),
+                                            source='ingredient')
     amount = serializers.IntegerField(min_value=1)
 
     class Meta:
@@ -46,7 +49,9 @@ class IngredientInRecipeWriteSerializer(serializers.ModelSerializer):
 class IngredientInRecipeReadSerializer(serializers.ModelSerializer):
     id = serializers.ReadOnlyField(source='ingredient.id')
     name = serializers.ReadOnlyField(source='ingredient.name')
-    measurement_unit = serializers.ReadOnlyField(source='ingredient.measurement_unit')
+    measurement_unit = serializers.ReadOnlyField(
+        source='ingredient.measurement_unit'
+    )
 
     class Meta:
         model = RecipeIngredient
@@ -56,12 +61,13 @@ class IngredientInRecipeReadSerializer(serializers.ModelSerializer):
 class RecipeReadSerializer(serializers.ModelSerializer):
     tags = TagSerializer(many=True)
     author = PublicUserSerializer(read_only=True)
-    ingredients = IngredientInRecipeReadSerializer(source='recipe_ingredients', many=True)
+    ingredients = IngredientInRecipeReadSerializer(
+        source='recipe_ingredients', many=True
+    )
     image = Base64ImageField()
     is_favorited = serializers.SerializerMethodField()
     is_in_shopping_cart = serializers.SerializerMethodField()
     short_link = serializers.SerializerMethodField()
-    
 
     class Meta:
         model = Recipe
@@ -73,27 +79,33 @@ class RecipeReadSerializer(serializers.ModelSerializer):
 
     def get_is_favorited(self, obj):
         user = self.context.get('request').user
-        return user.is_authenticated and Favorite.objects.filter(user=user, recipe=obj).exists()
+        return user.is_authenticated and Favorite.objects.filter(user=user,
+                                                                 recipe=obj
+                                                                 ).exists()
 
     def get_is_in_shopping_cart(self, obj):
         user = self.context.get('request').user
-        return user.is_authenticated and ShoppingCart.objects.filter(user=user, recipe=obj).exists()
+        return user.is_authenticated and ShoppingCart.objects.filter(
+            user=user, recipe=obj).exists()
 
     def get_short_link(self, obj):
         request = self.context.get('request')
         if request:
-            return request.build_absolute_uri(reverse('short-redirect', args=[obj.short_code]))
+            return request.build_absolute_uri(reverse('short-redirect',
+                                                      args=[obj.short_code]))
         return f'/s/{obj.short_code}'
 
 
 class RecipeWriteSerializer(serializers.ModelSerializer):
-    tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(), many=True)
+    tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(),
+                                              many=True)
     ingredients = IngredientInRecipeWriteSerializer(many=True)
     image = Base64ImageField()
 
     class Meta:
         model = Recipe
-        fields = ('name', 'image', 'text', 'cooking_time', 'tags', 'ingredients')
+        fields = ('name', 'image', 'text', 'cooking_time',
+                  'tags', 'ingredients')
 
     def validate(self, data):
         if not data.get('ingredients'):
@@ -105,19 +117,11 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
     def _set_m2m(self, recipe, tags, ingredients):
         recipe.tags.set(tags)
         objs = [
-            RecipeIngredient(recipe=recipe, ingredient=item['ingredient'], amount=item['amount'])
+            RecipeIngredient(recipe=recipe, ingredient=item['ingredient'],
+                             amount=item['amount'])
             for item in ingredients
         ]
         RecipeIngredient.objects.bulk_create(objs)
-
-    # @transaction.atomic
-    # def create(self, validated_data):
-    #     tags = validated_data.pop('tags')
-    #     ingredients = validated_data.pop('ingredients')
-    #     #recipe = Recipe.objects.create(author=self.context['request'].user, **validated_data)
-    #     recipe = Recipe.objects.create(**validated_data)
-    #     self._set_m2m(recipe, tags, ingredients)
-    #     return recipe
 
     @transaction.atomic
     def create(self, validated_data):
@@ -156,12 +160,11 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         return instance
 
     def to_representation(self, instance):
-        return RecipeReadNoShortLinkSerializer(instance, context=self.context).data
+        return RecipeReadNoShortLinkSerializer(instance,
+                                               context=self.context).data
 
-
-    
 
 class RecipeReadNoShortLinkSerializer(RecipeReadSerializer):
     class Meta(RecipeReadSerializer.Meta):
-        fields = tuple(f for f in RecipeReadSerializer.Meta.fields if f != 'short_link')
-
+        fields = tuple(f for f in RecipeReadSerializer.Meta.fields
+                       if f != 'short_link')

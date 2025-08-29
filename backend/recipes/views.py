@@ -5,11 +5,12 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
-from rest_framework.filters import SearchFilter
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
-from .models import Recipe, Tag, Ingredient, Favorite, ShoppingCart, RecipeIngredient
+from .models import (
+    Recipe, Tag, Ingredient, Favorite, ShoppingCart, RecipeIngredient
+)
 from .serializers import (
     RecipeReadSerializer, RecipeWriteSerializer,
     TagSerializer, IngredientSerializer, RecipeReadNoShortLinkSerializer
@@ -39,10 +40,10 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         name = self.request.query_params.get('name')
-        
+
         if name:
             queryset = queryset.filter(name__icontains=name)
-            
+
         return queryset
 
 
@@ -67,24 +68,27 @@ class RecipeViewSet(viewsets.ModelViewSet):
         data = request.data
 
         if not request.user.is_authenticated:
-            return Response({'detail': 'Authentication credentials were not provided.'},
+            return Response(
+                            {'detail':
+                             'Authentication credentials were not provided.'},
                             status=status.HTTP_401_UNAUTHORIZED)
 
-        # Duplicate ingredients
-        ids = [str(i.get('id') or i.get('ingredient')) for i in data.get('ingredients', [])]
+        ids = [str(i.get('id') or i.get('ingredient')) for i in data.get(
+            'ingredients', [])]
         if len(ids) != len(set(ids)):
-            return Response({'ingredients': 'Ingredients must not be duplicated'},
+            return Response({'ingredients':
+                             'Ingredients must not be duplicated'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        # Duplicate tags
         tags = data.get('tags') or []
         if len(tags) != len(set(tags)):
             return Response({'tags': 'Tags must not be duplicated'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        # Cooking time check
-        if str(data.get('cooking_time')).isdigit() and int(data.get('cooking_time')) < 1:
-            return Response({'cooking_time': 'Minimum cooking time is 1 minute'},
+        if str(data.get('cooking_time')).isdigit() and int(data.get(
+                'cooking_time')) < 1:
+            return Response({'cooking_time':
+                             'Minimum cooking time is 1 minute'},
                             status=status.HTTP_400_BAD_REQUEST)
 
         return super().create(request, *args, **kwargs)
@@ -92,14 +96,16 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         data = request.data
 
-        # Проверка ингредиентов до поиска рецепта
         if not data.get('ingredients'):
-            return Response({'ingredients': 'At least one ingredient is required'},
+            return Response({'ingredients':
+                             'At least one ingredient is required'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        ids = [str(i.get('id') or i.get('ingredient')) for i in data['ingredients']]
+        ids = [str(i.get('id') or i.get('ingredient'))
+               for i in data['ingredients']]
         if len(ids) != len(set(ids)):
-            return Response({'ingredients': 'Ingredients must not be duplicated'},
+            return Response({'ingredients':
+                             'Ingredients must not be duplicated'},
                             status=status.HTTP_400_BAD_REQUEST)
 
         tags = data.get('tags') or []
@@ -107,11 +113,12 @@ class RecipeViewSet(viewsets.ModelViewSet):
             return Response({'tags': 'Tags must not be duplicated'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        if str(data.get('cooking_time')).isdigit() and int(data.get('cooking_time')) < 1:
-            return Response({'cooking_time': 'Minimum cooking time is 1 minute'},
+        if str(data.get('cooking_time')).isdigit() and int(
+                data.get('cooking_time')) < 1:
+            return Response({'cooking_time':
+                             'Minimum cooking time is 1 minute'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        # Теперь проверка существования рецепта
         recipe = Recipe.objects.filter(pk=kwargs.get('pk')).first()
         if not recipe:
             return Response({'detail': 'Рецепта с таким ID не существует'},
@@ -120,10 +127,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
-        # Поведение идентично update
         return self.update(request, *args, **kwargs)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True,
+            methods=['post'], permission_classes=[IsAuthenticated])
     def favorite(self, request, pk=None):
         recipe = Recipe.objects.filter(pk=pk).first()
         if recipe is None:
@@ -136,7 +143,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
         data = {
             'id': recipe.id,
             'name': recipe.name,
-            'image': request.build_absolute_uri(recipe.image.url) if recipe.image else None,
+            'image': request.build_absolute_uri(recipe.image.url)
+            if recipe.image else None,
             'cooking_time': recipe.cooking_time
         }
         return Response(data, status=status.HTTP_201_CREATED)
@@ -151,20 +159,23 @@ class RecipeViewSet(viewsets.ModelViewSet):
         favorite.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True,
+            methods=['post'], permission_classes=[IsAuthenticated])
     def shopping_cart(self, request, pk=None):
         recipe = Recipe.objects.filter(pk=pk).first()
         if recipe is None:
             return Response({'errors': 'Recipe with this ID does not exist'},
                             status=status.HTTP_400_BAD_REQUEST)
-        if ShoppingCart.objects.filter(user=request.user, recipe=recipe).exists():
+        if ShoppingCart.objects.filter(user=request.user,
+                                       recipe=recipe).exists():
             return Response({'errors': 'Recipe is already in shopping cart'},
                             status=status.HTTP_400_BAD_REQUEST)
         ShoppingCart.objects.create(user=request.user, recipe=recipe)
         data = {
             'id': recipe.id,
             'name': recipe.name,
-            'image': request.build_absolute_uri(recipe.image.url) if recipe.image else None,
+            'image': request.build_absolute_uri(recipe.image.url)
+            if recipe.image else None,
             'cooking_time': recipe.cooking_time
         }
         return Response(data, status=status.HTTP_201_CREATED)
@@ -172,14 +183,16 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @shopping_cart.mapping.delete
     def remove_shopping_cart(self, request, pk=None):
         recipe = self.get_object()
-        cart_item = ShoppingCart.objects.filter(user=request.user, recipe=recipe)
+        cart_item = ShoppingCart.objects.filter(user=request.user,
+                                                recipe=recipe)
         if not cart_item.exists():
             return Response({'errors': 'Recipe is not in shopping cart'},
                             status=status.HTTP_400_BAD_REQUEST)
         cart_item.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get'],
+            permission_classes=[IsAuthenticated])
     def download_shopping_cart(self, request):
         items = (
             RecipeIngredient.objects
@@ -196,5 +209,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
             content,
             content_type='text/plain; charset=utf-8'
         )
-        response['Content-Disposition'] = 'attachment; filename="shopping_list.txt"'
+        response['Content-Disposition'] = (
+            'attachment; filename="shopping_list.txt"'
+        )
+
         return response

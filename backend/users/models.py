@@ -17,8 +17,11 @@ class CustomUser(AbstractUser):
 
 
 class Follow(models.Model):
-    user = models.ForeignKey(CustomUser, related_name='follows', on_delete=models.CASCADE)
-    author = models.ForeignKey(CustomUser, related_name='following', on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser,
+                             related_name='follows', on_delete=models.CASCADE)
+    author = models.ForeignKey(CustomUser,
+                               related_name='following',
+                               on_delete=models.CASCADE)
 
     class Meta:
         unique_together = ('user', 'author')

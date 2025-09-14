@@ -1,5 +1,6 @@
 import django_filters
 from django_filters.rest_framework import filters
+
 from .models import Recipe, Ingredient
 
 
@@ -8,7 +9,7 @@ class IngredientFilter(django_filters.FilterSet):
 
     class Meta:
         model = Ingredient
-        fields = ['name']
+        fields = ('name',)
 
 
 class RecipeFilter(django_filters.FilterSet):
@@ -19,7 +20,7 @@ class RecipeFilter(django_filters.FilterSet):
 
     class Meta:
         model = Recipe
-        fields = ['tags', 'author']
+        fields = ('tags', 'author')
 
     def filter_favorited(self, qs, name, value):
         user = self.request.user

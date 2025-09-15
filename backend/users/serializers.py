@@ -1,4 +1,5 @@
 from rest_framework import serializers
+
 from .models import CustomUser, Follow
 from recipes.models import Recipe
 
@@ -98,6 +99,5 @@ class FollowCreateSerializer(serializers.ModelSerializer):
         return Follow.objects.create(**validated_data)
 
     def to_representation(self, instance):
-        from .serializers import SubscriptionSerializer
         return SubscriptionSerializer(instance.author,
                                       context=self.context).data

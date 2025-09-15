@@ -2,9 +2,8 @@ from rest_framework import serializers
 from django.db import transaction
 from django.urls import reverse
 from django.core.files.base import ContentFile
-from django.db.models import Max
+from django.db.models import Max, IntegerField
 from django.db.models.functions import Cast
-from django.db.models import IntegerField
 import base64
 import imghdr
 

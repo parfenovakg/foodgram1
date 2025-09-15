@@ -1,12 +1,11 @@
 from django.db.models import Sum, F
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
 
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+# from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 from .models import (
     Recipe, Tag, Ingredient, Favorite, ShoppingCart, RecipeIngredient
@@ -15,15 +14,8 @@ from .serializers import (
     RecipeReadSerializer, RecipeWriteSerializer,
     TagSerializer, IngredientSerializer, RecipeReadNoShortLinkSerializer
 )
-from .filters import RecipeFilter
-
-
-class IsAuthorOrReadOnly(BasePermission):
-    def has_object_permission(self, request, view, obj):
-        if request.method in SAFE_METHODS:
-            return True
-        u = request.user
-        return u.is_authenticated and (obj.author == u or u.is_staff)
+from .filters import RecipeFilter, IngredientFilter
+from api.permissions import IsAuthorOrReadOnly
 
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
@@ -36,6 +28,7 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
     pagination_class = None
+    filterset_class = IngredientFilter
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -61,74 +54,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
             return RecipeReadNoShortLinkSerializer
         return RecipeReadSerializer
 
-    def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
-
-    def create(self, request, *args, **kwargs):
-        data = request.data
-
-        if not request.user.is_authenticated:
-            return Response(
-                            {'detail':
-                             'Authentication credentials were not provided.'},
-                            status=status.HTTP_401_UNAUTHORIZED)
-
-        ids = [str(i.get('id') or i.get('ingredient')) for i in data.get(
-            'ingredients', [])]
-        if len(ids) != len(set(ids)):
-            return Response({'ingredients':
-                             'Ingredients must not be duplicated'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        tags = data.get('tags') or []
-        if len(tags) != len(set(tags)):
-            return Response({'tags': 'Tags must not be duplicated'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        if str(data.get('cooking_time')).isdigit() and int(data.get(
-                'cooking_time')) < 1:
-            return Response({'cooking_time':
-                             'Minimum cooking time is 1 minute'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        return super().create(request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        data = request.data
-
-        if not data.get('ingredients'):
-            return Response({'ingredients':
-                             'At least one ingredient is required'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        ids = [str(i.get('id') or i.get('ingredient'))
-               for i in data['ingredients']]
-        if len(ids) != len(set(ids)):
-            return Response({'ingredients':
-                             'Ingredients must not be duplicated'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        tags = data.get('tags') or []
-        if len(tags) != len(set(tags)):
-            return Response({'tags': 'Tags must not be duplicated'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        if str(data.get('cooking_time')).isdigit() and int(
-                data.get('cooking_time')) < 1:
-            return Response({'cooking_time':
-                             'Minimum cooking time is 1 minute'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        recipe = Recipe.objects.filter(pk=kwargs.get('pk')).first()
-        if not recipe:
-            return Response({'detail': 'Рецепта с таким ID не существует'},
-                            status=status.HTTP_404_NOT_FOUND)
-
-        return super().update(request, *args, **kwargs)
-
-    def partial_update(self, request, *args, **kwargs):
-        return self.update(request, *args, **kwargs)
-
     @action(detail=True,
             methods=['post'], permission_classes=[IsAuthenticated])
     def favorite(self, request, pk=None):
@@ -151,12 +76,21 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     @favorite.mapping.delete
     def unfavorite(self, request, pk=None):
-        recipe = get_object_or_404(Recipe, pk=pk)
-        favorite = Favorite.objects.filter(user=request.user, recipe=recipe)
-        if not favorite.exists():
-            return Response({'errors': 'Recipe is not in favorites'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        favorite.delete()
+        recipe = Recipe.objects.filter(pk=pk).first()
+        if not recipe:
+            return Response({'errors': 'Рецепт не найден'},
+                            status=status.HTTP_404_NOT_FOUND)
+        deleted_count, _ = Favorite.objects.filter(
+            user=request.user,
+            recipe__id=pk
+        ).delete()
+
+        if deleted_count == 0:
+            return Response(
+                {'errors': 'Рецепт не был в избранном'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True,
@@ -182,13 +116,20 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     @shopping_cart.mapping.delete
     def remove_shopping_cart(self, request, pk=None):
-        recipe = self.get_object()
-        cart_item = ShoppingCart.objects.filter(user=request.user,
-                                                recipe=recipe)
-        if not cart_item.exists():
-            return Response({'errors': 'Recipe is not in shopping cart'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        cart_item.delete()
+        recipe = Recipe.objects.filter(pk=pk).first()
+        if not recipe:
+            return Response({'errors': 'Рецепт не найден'},
+                            status=status.HTTP_404_NOT_FOUND)
+        deleted_count, _ = ShoppingCart.objects.filter(
+            user=request.user,
+            recipe__id=pk
+        ).delete()
+        if deleted_count == 0:
+            return Response(
+                {'errors': 'Рецепт не был в корзине'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['get'],

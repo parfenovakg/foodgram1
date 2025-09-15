@@ -4,8 +4,15 @@ from django_filters.rest_framework import filters
 from .models import Recipe, Ingredient
 
 
+# class IngredientFilter(django_filters.FilterSet):
+#     name = filters.CharFilter(field_name='name', lookup_expr='istartswith')
+
+#     class Meta:
+#         model = Ingredient
+#         fields = ('name',)
+
 class IngredientFilter(django_filters.FilterSet):
-    name = filters.CharFilter(field_name='name', lookup_expr='istartswith')
+    name = django_filters.CharFilter(field_name='name', lookup_expr='icontains')
 
     class Meta:
         model = Ingredient

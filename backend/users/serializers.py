@@ -68,3 +68,36 @@ class SubscriptionSerializer(PublicUserSerializer):
             recipes = recipes[:int(limit)]
 
         return RecipeMinSerializer(recipes, many=True).data
+
+
+class FollowCreateSerializer(serializers.ModelSerializer):
+    user = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    author = serializers.PrimaryKeyRelatedField(
+        queryset=CustomUser.objects.all()
+        )
+
+    class Meta:
+        model = Follow
+        fields = ('user', 'author')
+
+    def validate(self, data):
+        user = data['user']
+        author = data['author']
+
+        if user == author:
+            raise serializers.ValidationError(
+                'Нельзя подписаться на самого себя.')
+
+        if Follow.objects.filter(user=user, author=author).exists():
+            raise serializers.ValidationError(
+                'Вы уже подписаны на этого пользователя.')
+
+        return data
+
+    def create(self, validated_data):
+        return Follow.objects.create(**validated_data)
+
+    def to_representation(self, instance):
+        from .serializers import SubscriptionSerializer
+        return SubscriptionSerializer(instance.author,
+                                      context=self.context).data

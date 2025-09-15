@@ -1,3 +1,4 @@
+from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -5,7 +6,7 @@ from rest_framework.response import Response
 
 from .models import CustomUser, Follow
 from .serializers import (
-    CustomUserSerializer, RegisterUserSerializer,
+    CustomUserSerializer, FollowCreateSerializer,
     PublicUserSerializer, SubscriptionSerializer
 )
 from django.core.files.base import ContentFile
@@ -31,34 +32,19 @@ class AvatarSerializer(serializers.ModelSerializer):
         fields = ('avatar',)
 
 
-class UserViewSet(viewsets.ModelViewSet):
-    queryset = CustomUser.objects.all()
+class UserViewSet(DjoserUserViewSet):
+    queryset = CustomUser.objects.all().order_by('id')
     serializer_class = CustomUserSerializer
 
     def get_serializer_class(self):
-        if self.action == 'create':
-            return RegisterUserSerializer
-        if self.action in ('list', 'retrieve', 'me'):
+        if self.action in ('list', 'retrieve'):
             return PublicUserSerializer
         return super().get_serializer_class()
 
     def get_permissions(self):
-        if self.action == 'create':
+        if self.action in ('list', 'retrieve'):
             return [AllowAny()]
         return super().get_permissions()
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        password = request.data.get('password')
-        if password:
-            user.set_password(password)
-            user.save()
-
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED,
-                        headers=headers)
 
     @action(detail=False, methods=['get'],
             permission_classes=[IsAuthenticated])
@@ -67,66 +53,67 @@ class UserViewSet(viewsets.ModelViewSet):
                                           context={'request': request})
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'],
-            permission_classes=[IsAuthenticated])
-    def set_password(self, request):
-        user = request.user
-        current_password = request.data.get('current_password')
-        new_password = request.data.get('new_password')
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def subscribe(self, request, id=None):
+        author = self.get_object()
+        serializer = FollowCreateSerializer(
+            data={'author': author.id},
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        if not current_password or not new_password:
+    @subscribe.mapping.delete
+    def unsubscribe(self, request, id=None):
+        author = self.get_object()
+        deleted_count, _ = Follow.objects.filter(user=request.user, author=author).delete()
+
+        if deleted_count == 0:
             return Response(
-                {'error':
-                 'Both current_password and new_password are required'},
+                {'detail': 'Подписки не существует'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if not user.check_password(current_password):
-            return Response(
-                {'error': 'Current password is incorrect'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        user.set_password(new_password)
-        user.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True, methods=['post', 'delete'],
-            permission_classes=[IsAuthenticated])
-    def subscribe(self, request, pk=None):
-        author = self.get_object()
-        if author == request.user:
-            return Response({'detail': 'You cannot subscribe to yourself.'},
-                            status=400)
 
-        if request.method == 'POST':
-            if Follow.objects.filter(user=request.user,
-                                     author=author).exists():
-                return Response({'detail':
-                                 'You are already subscribed to this user.'
-                                 }, status=400)
+    # @action(detail=True, methods=['post', 'delete'],
+    #         permission_classes=[IsAuthenticated])
+    # def subscribe(self, request, id=None):
+    #     author = self.get_object()
+    #     if author == request.user:
+    #         return Response({'detail': 'You cannot subscribe to yourself.'},
+    #                         status=400)
 
-            Follow.objects.create(user=request.user, author=author)
-            serializer = SubscriptionSerializer(
-                author,
-                context={'request': request}
-            )
-            return Response(serializer.data, status=201)
-        if request.method == 'DELETE':
-            follow_qs = Follow.objects.filter(user=request.user, author=author)
-            if not follow_qs.exists():
-                return Response(
-                    {'detail': 'Подписки не существует'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            follow_qs.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+    #     if request.method == 'POST':
+    #         if Follow.objects.filter(user=request.user,
+    #                                  author=author).exists():
+    #             return Response({'detail':
+    #                              'You are already subscribed to this user.'
+    #                              }, status=400)
 
-        Follow.objects.filter(user=request.user, author=author).delete()
-        return Response(status=204)
+    #         Follow.objects.create(user=request.user, author=author)
+    #         serializer = SubscriptionSerializer(
+    #             author,
+    #             context={'request': request}
+    #         )
+    #         return Response(serializer.data, status=201)
+    #     if request.method == 'DELETE':
+    #         follow_qs = Follow.objects.filter(user=request.user, author=author)
+    #         if not follow_qs.exists():
+    #             return Response(
+    #                 {'detail': 'Подписки не существует'},
+    #                 status=status.HTTP_400_BAD_REQUEST
+    #             )
+    #         follow_qs.delete()
+    #         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    #     Follow.objects.filter(user=request.user, author=author).delete()
+    #     return Response(status=204)
 
     @action(detail=False, methods=['get'],
-            permission_classes=[IsAuthenticated])
+            permission_classes=[AllowAny])
     def subscriptions(self, request):
         authors = CustomUser.objects.filter(
             following__user=request.user).distinct()
@@ -138,16 +125,16 @@ class UserViewSet(viewsets.ModelViewSet):
         )
         return self.get_paginated_response(serializer.data)
 
-    @action(detail=False, methods=['patch', 'delete'],
-            permission_classes=[IsAuthenticated], url_path='me/avatar')
-    def me_avatar(self, request):
-        if request.method == 'DELETE':
-            request.user.avatar.delete(save=True)
-            return Response(status=204)
-        ser = AvatarSerializer(request.user, data=request.data,
-                               partial=True, context={'request': request})
-        ser.is_valid(raise_exception=True)
-        ser.save()
-        return Response(CustomUserSerializer(request.user,
-                                             context={'request': request}
-                                             ).data)
+    # @action(detail=False, methods=['patch', 'delete'],
+    #         permission_classes=[IsAuthenticated], url_path='me/avatar')
+    # def me_avatar(self, request):
+    #     if request.method == 'DELETE':
+    #         request.user.avatar.delete(save=True)
+    #         return Response(status=204)
+    #     ser = AvatarSerializer(request.user, data=request.data,
+    #                            partial=True, context={'request': request})
+    #     ser.is_valid(raise_exception=True)
+    #     ser.save()
+    #     return Response(CustomUserSerializer(request.user,
+    #                                          context={'request': request}
+    #                                          ).data)

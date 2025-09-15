@@ -20,7 +20,7 @@ User = get_user_model()
 
 class Tag(models.Model):
     name = models.CharField(max_length=TAG_NAME_MAX_LENGTH, unique=True)
-    color = ColorField(unique=True)  # ✅ заменили CharField + кастомный валидатор
+    color = ColorField(unique=True)
     slug = models.SlugField(max_length=SLUG_MAX_LENGTH, unique=True)
 
     def __str__(self):
@@ -28,7 +28,8 @@ class Tag(models.Model):
 
 
 class Ingredient(models.Model):
-    name = models.CharField(max_length=INGREDIENT_NAME_MAX_LENGTH, db_index=True)
+    name = models.CharField(max_length=INGREDIENT_NAME_MAX_LENGTH,
+                            db_index=True)
     measurement_unit = models.CharField(max_length=MEASUREMENT_UNIT_MAX_LENGTH)
 
     class Meta:
@@ -60,7 +61,8 @@ class Recipe(models.Model):
     )
     tags = models.ManyToManyField(Tag, related_name='recipes')
     cooking_time = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(MIN_COOKING_TIME), MaxValueValidator(MAX_COOKING_TIME)]
+        validators=[MinValueValidator(MIN_COOKING_TIME),
+                    MaxValueValidator(MAX_COOKING_TIME)]
     )
     short_code = models.CharField(max_length=SHORT_CODE_MAX_LENGTH,
                                   default='TEMP', unique=True, editable=False)
@@ -80,7 +82,9 @@ class RecipeIngredient(models.Model):
         related_name='recipe_ingredients'
     )
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE)
-    amount = models.PositiveIntegerField()
+    amount = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)]
+    )
 
     class Meta:
         constraints = [
@@ -131,4 +135,3 @@ class ShoppingCart(models.Model):
                 name='unique_cart_item'
             )
         ]
-

@@ -39,7 +39,6 @@ class IngredientSerializer(serializers.ModelSerializer):
 class IngredientInRecipeWriteSerializer(serializers.ModelSerializer):
     id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all(),
                                             source='ingredient')
-    amount = serializers.IntegerField(min_value=1)
 
     class Meta:
         model = RecipeIngredient
@@ -78,15 +77,20 @@ class RecipeReadSerializer(serializers.ModelSerializer):
         )
 
     def get_is_favorited(self, obj):
-        user = self.context.get('request').user
-        return user.is_authenticated and Favorite.objects.filter(user=user,
-                                                                 recipe=obj
-                                                                 ).exists()
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        return (
+            request and user and user.is_authenticated and
+            Favorite.objects.filter(user=user, recipe=obj).exists()
+        )
 
     def get_is_in_shopping_cart(self, obj):
-        user = self.context.get('request').user
-        return user.is_authenticated and ShoppingCart.objects.filter(
-            user=user, recipe=obj).exists()
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        return (
+            request and user and user.is_authenticated and
+            ShoppingCart.objects.filter(user=user, recipe=obj).exists()
+        )
 
     def get_short_link(self, obj):
         request = self.context.get('request')
@@ -108,17 +112,41 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
                   'tags', 'ingredients')
 
     def validate(self, data):
-        if not data.get('ingredients'):
-            raise serializers.ValidationError('Нужен хотя бы один ингредиент.')
-        if not data.get('tags'):
-            raise serializers.ValidationError('Нужен хотя бы один тег.')
+        ingredients = data.get('ingredients')
+        tags = data.get('tags')
+
+        if not ingredients:
+            raise serializers.ValidationError({
+                'ingredients': 'Нужен хотя бы один ингредиент.'
+            })
+
+        if len({item['ingredient'].id for
+                item in ingredients}) != len(ingredients):
+            raise serializers.ValidationError({
+                'ingredients': 'Ингредиенты не должны повторяться.'
+            })
+
+        if not tags:
+            raise serializers.ValidationError({
+                'tags': 'Нужен хотя бы один тег.'
+            })
+
+        if len(set(tags)) != len(tags):
+            raise serializers.ValidationError({
+                'tags': 'Теги не должны повторяться.'
+            })
+
         return data
 
-    def _set_m2m(self, recipe, tags, ingredients):
+    @staticmethod
+    def _set_m2m(recipe, tags, ingredients):
         recipe.tags.set(tags)
         objs = [
-            RecipeIngredient(recipe=recipe, ingredient=item['ingredient'],
-                             amount=item['amount'])
+            RecipeIngredient(
+                recipe=recipe,
+                ingredient=item['ingredient'],
+                amount=item['amount']
+            )
             for item in ingredients
         ]
         RecipeIngredient.objects.bulk_create(objs)
@@ -128,10 +156,9 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         tags = validated_data.pop('tags')
         ingredients = validated_data.pop('ingredients')
 
-        # Берём максимум только по тем short_code, что являются числами
         last_code = (
             Recipe.objects
-            .filter(short_code__regex=r'^\d+$')              # только цифры
+            .filter(short_code__regex=r'^\d+$')
             .annotate(code_int=Cast('short_code', IntegerField()))
             .aggregate(max_code=Max('code_int'))
             .get('max_code') or 0
@@ -149,14 +176,15 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         tags = validated_data.pop('tags', None)
         ingredients = validated_data.pop('ingredients', None)
-        for attr, val in validated_data.items():
-            setattr(instance, attr, val)
-        instance.save()
+
+        instance = super().update(instance, validated_data)
+
         if tags is not None:
             instance.tags.set(tags)
         if ingredients is not None:
             instance.recipe_ingredients.all().delete()
             self._set_m2m(instance, instance.tags.all(), ingredients)
+
         return instance
 
     def to_representation(self, instance):

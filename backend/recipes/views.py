@@ -1,5 +1,7 @@
 from django.db.models import Sum, F
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+
 
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -10,8 +12,9 @@ from .models import (
     Recipe, Tag, Ingredient, Favorite, ShoppingCart, RecipeIngredient
 )
 from .serializers import (
-    RecipeReadSerializer, RecipeWriteSerializer,
-    TagSerializer, IngredientSerializer, RecipeReadNoShortLinkSerializer
+    RecipeReadSerializer, RecipeWriteSerializer, ShoppingCartSerializer,
+    TagSerializer, IngredientSerializer,
+    RecipeReadNoShortLinkSerializer, FavoriteSerializer
 )
 from .filters import RecipeFilter, IngredientFilter
 from api.permissions import IsAuthorOrReadOnly
@@ -29,15 +32,6 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = None
     filterset_class = IngredientFilter
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        name = self.request.query_params.get('name')
-
-        if name:
-            queryset = queryset.filter(name__istartswith=name)
-
-        return queryset
-
 
 class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.select_related('author').prefetch_related(
@@ -49,42 +43,27 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):
             return RecipeWriteSerializer
-        if self.action in ('list', 'favorite', 'shopping_cart', 'retrieve'):
+        else:
             return RecipeReadNoShortLinkSerializer
-        return RecipeReadSerializer
 
-    @action(detail=True,
-            methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'],
+            permission_classes=[IsAuthenticated])
     def favorite(self, request, pk=None):
-        recipe = Recipe.objects.filter(pk=pk).first()
-        if recipe is None:
-            return Response({'errors': 'Recipe with this ID does not exist'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        if Favorite.objects.filter(user=request.user, recipe=recipe).exists():
-            return Response({'errors': 'Recipe is already in favorites'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        Favorite.objects.create(user=request.user, recipe=recipe)
-        data = {
-            'id': recipe.id,
-            'name': recipe.name,
-            'image': request.build_absolute_uri(recipe.image.url)
-            if recipe.image else None,
-            'cooking_time': recipe.cooking_time
-        }
-        return Response(data, status=status.HTTP_201_CREATED)
+        serializer = FavoriteSerializer(
+            data={'recipe': pk},
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @favorite.mapping.delete
     def unfavorite(self, request, pk=None):
-        recipe = Recipe.objects.filter(pk=pk).first()
-        if not recipe:
-            return Response({'errors': 'Рецепт не найден'},
-                            status=status.HTTP_404_NOT_FOUND)
-        deleted_count, _ = Favorite.objects.filter(
-            user=request.user,
-            recipe__id=pk
-        ).delete()
+        recipe = get_object_or_404(Recipe, pk=pk)
 
-        if deleted_count == 0:
+        deleted, _ = Favorite.objects.filter(user=request.user,
+                                             recipe=recipe).delete()
+        if not deleted:
             return Response(
                 {'errors': 'Рецепт не был в избранном'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -92,38 +71,24 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True,
-            methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'],
+            permission_classes=[IsAuthenticated])
     def shopping_cart(self, request, pk=None):
-        recipe = Recipe.objects.filter(pk=pk).first()
-        if recipe is None:
-            return Response({'errors': 'Recipe with this ID does not exist'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        if ShoppingCart.objects.filter(user=request.user,
-                                       recipe=recipe).exists():
-            return Response({'errors': 'Recipe is already in shopping cart'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        ShoppingCart.objects.create(user=request.user, recipe=recipe)
-        data = {
-            'id': recipe.id,
-            'name': recipe.name,
-            'image': request.build_absolute_uri(recipe.image.url)
-            if recipe.image else None,
-            'cooking_time': recipe.cooking_time
-        }
-        return Response(data, status=status.HTTP_201_CREATED)
+        serializer = ShoppingCartSerializer(
+            data={'recipe': pk},
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @shopping_cart.mapping.delete
     def remove_shopping_cart(self, request, pk=None):
-        recipe = Recipe.objects.filter(pk=pk).first()
-        if not recipe:
-            return Response({'errors': 'Рецепт не найден'},
-                            status=status.HTTP_404_NOT_FOUND)
-        deleted_count, _ = ShoppingCart.objects.filter(
-            user=request.user,
-            recipe__id=pk
-        ).delete()
-        if deleted_count == 0:
+        recipe = get_object_or_404(Recipe, pk=pk)
+
+        deleted, _ = ShoppingCart.objects.filter(user=request.user,
+                                                 recipe=recipe).delete()
+        if not deleted:
             return Response(
                 {'errors': 'Рецепт не был в корзине'},
                 status=status.HTTP_400_BAD_REQUEST

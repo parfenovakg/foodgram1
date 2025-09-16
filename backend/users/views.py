@@ -42,7 +42,7 @@ class UserViewSet(DjoserUserViewSet):
     serializer_class = CustomUserSerializer
 
     def get_serializer_class(self):
-        if self.action in ('list', 'retrieve'):
+        if self.action in ('list', 'retrieve', 'me'):
             return PublicUserSerializer
         return super().get_serializer_class()
 
@@ -51,12 +51,14 @@ class UserViewSet(DjoserUserViewSet):
             return [AllowAny()]
         return super().get_permissions()
 
-    @action(detail=False, methods=['get'],
-            permission_classes=[IsAuthenticated])
+    @action(
+        detail=False,
+        methods=['get'],
+        permission_classes=[IsAuthenticated]
+    )
     def me(self, request):
-        serializer = PublicUserSerializer(request.user,
-                                          context={'request': request})
-        return Response(serializer.data)
+        return super().me(request)
+
 
     @action(detail=True, methods=['post'],
             permission_classes=[IsAuthenticated])
@@ -76,7 +78,7 @@ class UserViewSet(DjoserUserViewSet):
         deleted_count, _ = Follow.objects.filter(
             user=request.user, author=author).delete()
 
-        if deleted_count == 0:
+        if not deleted_count:
             return Response(
                 {'detail': 'Подписки не существует'},
                 status=status.HTTP_400_BAD_REQUEST

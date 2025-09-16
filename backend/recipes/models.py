@@ -13,6 +13,8 @@ from foodgram.const import (
     SHORT_CODE_MAX_LENGTH,
     MIN_COOKING_TIME,
     MAX_COOKING_TIME,
+    MIN_INGREDIENT_AMOUNT,
+    MAX_INGREDIENT_AMOUNT,
 )
 
 User = get_user_model()
@@ -83,7 +85,10 @@ class RecipeIngredient(models.Model):
     )
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE)
     amount = models.PositiveIntegerField(
-        validators=[MinValueValidator(1)]
+        validators=[
+            MinValueValidator(MIN_INGREDIENT_AMOUNT),
+            MaxValueValidator(MAX_INGREDIENT_AMOUNT)
+        ]
     )
 
     class Meta:

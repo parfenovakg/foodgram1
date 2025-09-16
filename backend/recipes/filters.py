@@ -5,7 +5,7 @@ from .models import Recipe, Ingredient
 
 class IngredientFilter(django_filters.FilterSet):
     name = django_filters.CharFilter(field_name='name',
-                                     lookup_expr='icontains')
+                                     lookup_expr='istartswith')
 
     class Meta:
         model = Ingredient
@@ -28,12 +28,12 @@ class RecipeFilter(django_filters.FilterSet):
 
     def filter_favorited(self, qs, name, value):
         user = self.request.user
-        if value == '1' and user.is_authenticated:
+        if user.is_authenticated:
             return qs.filter(favorited_by__user=user)
         return qs
 
     def filter_in_cart(self, qs, name, value):
         user = self.request.user
-        if value == '1' and user.is_authenticated:
+        if user.is_authenticated:
             return qs.filter(in_shopping_cart__user=user)
         return qs

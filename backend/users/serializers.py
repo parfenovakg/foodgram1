@@ -14,9 +14,12 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
     def get_is_subscribed(self, obj):
         request = self.context.get('request')
-        if not request or request.user.is_anonymous:
-            return False
-        return Follow.objects.filter(user=request.user, author=obj).exists()
+        return bool(
+            request and
+            request.user.is_authenticated and
+            Follow.objects.filter(user=request.user, author=obj).exists()
+        )
+
 
 
 class RegisterUserSerializer(serializers.ModelSerializer):
@@ -71,32 +74,51 @@ class SubscriptionSerializer(PublicUserSerializer):
         return RecipeMinSerializer(recipes, many=True).data
 
 
+# class FollowCreateSerializer(serializers.ModelSerializer):
+#     user = serializers.HiddenField(default=serializers.CurrentUserDefault())
+#     author = serializers.PrimaryKeyRelatedField(
+#         queryset=CustomUser.objects.all()
+#     )
+
+#     class Meta:
+#         model = Follow
+#         fields = ('user', 'author')
+
+#     def validate(self, data):
+#         user = data['user']
+#         author = data['author']
+#         if user == author:
+#             raise serializers.ValidationError(
+#                 'Нельзя подписаться на самого себя.')
+
+#         if Follow.objects.filter(user=user, author=author).exists():
+#             raise serializers.ValidationError(
+#                 'Вы уже подписаны на этого пользователя.')
+#         return data
+
+#     def to_representation(self, instance):
+#         return SubscriptionSerializer(instance.author,
+#                                       context=self.context).data
+
 class FollowCreateSerializer(serializers.ModelSerializer):
-    user = serializers.HiddenField(default=serializers.CurrentUserDefault())
-    author = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all()
-        )
+    author = serializers.PrimaryKeyRelatedField(queryset=CustomUser.objects.all())
 
     class Meta:
         model = Follow
-        fields = ('user', 'author')
+        fields = ('author',)
 
-    def validate(self, data):
-        user = data['user']
-        author = data['author']
+    def validate(self, attrs):
+        user = self.context['request'].user
+        author = attrs['author']
 
         if user == author:
-            raise serializers.ValidationError(
-                'Нельзя подписаться на самого себя.')
+            raise serializers.ValidationError('Нельзя подписаться на самого себя.')
 
         if Follow.objects.filter(user=user, author=author).exists():
-            raise serializers.ValidationError(
-                'Вы уже подписаны на этого пользователя.')
+            raise serializers.ValidationError('Вы уже подписаны на этого пользователя.')
 
-        return data
-
-    def create(self, validated_data):
-        return Follow.objects.create(**validated_data)
+        attrs['user'] = user
+        return attrs
 
     def to_representation(self, instance):
         return SubscriptionSerializer(instance.author,

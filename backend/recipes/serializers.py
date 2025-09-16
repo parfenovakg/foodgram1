@@ -65,39 +65,31 @@ class RecipeReadSerializer(serializers.ModelSerializer):
     image = Base64ImageField()
     is_favorited = serializers.SerializerMethodField()
     is_in_shopping_cart = serializers.SerializerMethodField()
-    short_link = serializers.SerializerMethodField()
+    # short_link = serializers.SerializerMethodField()
 
     class Meta:
         model = Recipe
         fields = (
             'id', 'tags', 'author', 'ingredients',
             'is_favorited', 'is_in_shopping_cart',
-            'name', 'image', 'text', 'cooking_time', 'short_link'
+            'name', 'image', 'text', 'cooking_time'
         )
 
     def get_is_favorited(self, obj):
         request = self.context.get('request')
-        user = getattr(request, 'user', None)
-        return (
-            request and user and user.is_authenticated and
-            Favorite.objects.filter(user=user, recipe=obj).exists()
+        return bool(
+            request and
+            request.user.is_authenticated and
+            Favorite.objects.filter(user=request.user, recipe=obj).exists()
         )
 
     def get_is_in_shopping_cart(self, obj):
         request = self.context.get('request')
-        user = getattr(request, 'user', None)
-        return (
-            request and user and user.is_authenticated and
-            ShoppingCart.objects.filter(user=user, recipe=obj).exists()
+        return bool(
+            request and
+            request.user.is_authenticated and
+            ShoppingCart.objects.filter(user=request.user, recipe=obj).exists()
         )
-
-    def get_short_link(self, obj):
-        request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(reverse('short-redirect',
-                                                      args=[obj.short_code]))
-        return f'/s/{obj.short_code}'
-
 
 class RecipeWriteSerializer(serializers.ModelSerializer):
     tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(),
@@ -173,22 +165,69 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        tags = validated_data.pop('tags', None)
-        ingredients = validated_data.pop('ingredients', None)
+        validated_data.pop('tags', None)
+        validated_data.pop('ingredients', None)
 
         instance = super().update(instance, validated_data)
-
-        if tags is not None:
-            instance.tags.set(tags)
-        if ingredients is not None:
-            instance.recipe_ingredients.all().delete()
-            self._set_m2m(instance, instance.tags.all(), ingredients)
 
         return instance
 
     def to_representation(self, instance):
         return RecipeReadNoShortLinkSerializer(instance,
                                                context=self.context).data
+
+
+class FavoriteSerializer(serializers.ModelSerializer):
+    recipe = serializers.PrimaryKeyRelatedField(queryset=Recipe.objects.all())
+
+    class Meta:
+        model = Favorite
+        fields = ('recipe',)
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        recipe = attrs['recipe']
+        if Favorite.objects.filter(user=user, recipe=recipe).exists():
+            raise serializers.ValidationError('Рецепт уже в избранном.')
+        attrs['user'] = user
+        return attrs
+
+    def to_representation(self, instance):
+        recipe = instance.recipe
+        return {
+            'id': recipe.id,
+            'name': recipe.name,
+            'image': self.context['request'].build_absolute_uri(
+                recipe.image.url) if recipe.image else None,
+            'cooking_time': recipe.cooking_time
+        }
+
+
+class ShoppingCartSerializer(serializers.ModelSerializer):
+    recipe = serializers.PrimaryKeyRelatedField(queryset=Recipe.objects.all())
+
+    class Meta:
+        model = ShoppingCart
+        fields = ('recipe',)
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        recipe = attrs['recipe']
+        if ShoppingCart.objects.filter(user=user, recipe=recipe).exists():
+            raise serializers.ValidationError('Рецепт уже в корзине.')
+        attrs['user'] = user
+        return attrs
+
+    def to_representation(self, instance):
+        recipe = instance.recipe
+        return {
+            'id': recipe.id,
+            'name': recipe.name,
+            'image': self.context['request'].build_absolute_uri(
+                recipe.image.url)
+            if recipe.image else None,
+            'cooking_time': recipe.cooking_time
+        }
 
 
 class RecipeReadNoShortLinkSerializer(RecipeReadSerializer):

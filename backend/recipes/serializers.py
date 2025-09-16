@@ -1,9 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
-from django.urls import reverse
 from django.core.files.base import ContentFile
-from django.db.models import Max, IntegerField
-from django.db.models.functions import Cast
 import base64
 import imghdr
 
@@ -65,7 +62,6 @@ class RecipeReadSerializer(serializers.ModelSerializer):
     image = Base64ImageField()
     is_favorited = serializers.SerializerMethodField()
     is_in_shopping_cart = serializers.SerializerMethodField()
-    # short_link = serializers.SerializerMethodField()
 
     class Meta:
         model = Recipe
@@ -90,6 +86,7 @@ class RecipeReadSerializer(serializers.ModelSerializer):
             request.user.is_authenticated and
             ShoppingCart.objects.filter(user=request.user, recipe=obj).exists()
         )
+
 
 class RecipeWriteSerializer(serializers.ModelSerializer):
     tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(),
@@ -146,17 +143,6 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         tags = validated_data.pop('tags')
         ingredients = validated_data.pop('ingredients')
-
-        last_code = (
-            Recipe.objects
-            .filter(short_code__regex=r'^\d+$')
-            .annotate(code_int=Cast('short_code', IntegerField()))
-            .aggregate(max_code=Max('code_int'))
-            .get('max_code') or 0
-        )
-        next_code = str(last_code + 1).zfill(3)
-
-        validated_data['short_code'] = next_code
         validated_data['author'] = self.context['request'].user
 
         recipe = Recipe.objects.create(**validated_data)
@@ -167,14 +153,10 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data.pop('tags', None)
         validated_data.pop('ingredients', None)
-
-        instance = super().update(instance, validated_data)
-
-        return instance
+        return super().update(instance, validated_data)
 
     def to_representation(self, instance):
-        return RecipeReadNoShortLinkSerializer(instance,
-                                               context=self.context).data
+        return RecipeReadSerializer(instance, context=self.context).data
 
 
 class FavoriteSerializer(serializers.ModelSerializer):
@@ -224,13 +206,6 @@ class ShoppingCartSerializer(serializers.ModelSerializer):
             'id': recipe.id,
             'name': recipe.name,
             'image': self.context['request'].build_absolute_uri(
-                recipe.image.url)
-            if recipe.image else None,
+                recipe.image.url) if recipe.image else None,
             'cooking_time': recipe.cooking_time
         }
-
-
-class RecipeReadNoShortLinkSerializer(RecipeReadSerializer):
-    class Meta(RecipeReadSerializer.Meta):
-        fields = tuple(f for f in RecipeReadSerializer.Meta.fields
-                       if f != 'short_link')

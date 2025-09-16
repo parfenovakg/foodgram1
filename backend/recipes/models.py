@@ -10,7 +10,6 @@ from foodgram.const import (
     INGREDIENT_NAME_MAX_LENGTH,
     MEASUREMENT_UNIT_MAX_LENGTH,
     RECIPE_NAME_MAX_LENGTH,
-    SHORT_CODE_MAX_LENGTH,
     MIN_COOKING_TIME,
     MAX_COOKING_TIME,
     MIN_INGREDIENT_AMOUNT,
@@ -66,8 +65,6 @@ class Recipe(models.Model):
         validators=[MinValueValidator(MIN_COOKING_TIME),
                     MaxValueValidator(MAX_COOKING_TIME)]
     )
-    short_code = models.CharField(max_length=SHORT_CODE_MAX_LENGTH,
-                                  default='TEMP', unique=True, editable=False)
     pub_date = models.DateTimeField(default=timezone.now)
 
     class Meta:

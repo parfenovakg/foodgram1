@@ -2,7 +2,6 @@ from django.db.models import Sum, F
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 
-
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -13,8 +12,7 @@ from .models import (
 )
 from .serializers import (
     RecipeReadSerializer, RecipeWriteSerializer, ShoppingCartSerializer,
-    TagSerializer, IngredientSerializer,
-    RecipeReadNoShortLinkSerializer, FavoriteSerializer
+    TagSerializer, IngredientSerializer, FavoriteSerializer
 )
 from .filters import RecipeFilter, IngredientFilter
 from api.permissions import IsAuthorOrReadOnly
@@ -43,8 +41,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):
             return RecipeWriteSerializer
-        else:
-            return RecipeReadNoShortLinkSerializer
+        return RecipeReadSerializer
 
     @action(detail=True, methods=['post'],
             permission_classes=[IsAuthenticated])

@@ -84,7 +84,7 @@ class Command(BaseCommand):
                 recipe = Recipe(
                     author=author,
                     name=f"{name} #{i+1}",
-                    short_code=f"#{i+1}",
+                    # short_code=f"#{i+1}",
                     text=text,
                     cooking_time=cooking_time,
                 )

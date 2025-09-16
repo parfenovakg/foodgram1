@@ -1,7 +1,7 @@
 import random
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from users.models import CustomUser, Follow
+from users.models import User, Follow
 
 
 class Command(BaseCommand):
@@ -28,7 +28,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'Creating test follows (min: {min_follows}, max: {max_follows} per user)...'))
 
         # Get all users
-        users = list(CustomUser.objects.all())
+        users = list(User.objects.all())
         
         if len(users) < 2:
             self.stdout.write(self.style.ERROR('Not enough users to create follows. Please run create_test_users first.'))

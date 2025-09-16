@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.core.files.base import ContentFile
 from recipes.models import Recipe, Tag, Ingredient, RecipeIngredient
-from users.models import CustomUser
+from users.models import User
 
 
 class Command(BaseCommand):
@@ -24,7 +24,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'Creating {count} test recipes...'))
 
         # Check if we have users, tags, and ingredients
-        users = list(CustomUser.objects.all())
+        users = list(User.objects.all())
         tags = list(Tag.objects.all())
         ingredients = list(Ingredient.objects.all())
 

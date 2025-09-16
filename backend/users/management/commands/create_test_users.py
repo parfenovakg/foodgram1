@@ -1,7 +1,7 @@
 import random
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from users.models import CustomUser
+from users.models import User
 
 
 class Command(BaseCommand):
@@ -41,8 +41,8 @@ class Command(BaseCommand):
                 email = f"{username}@example.com"
                 
                 # Create user if it doesn't exist
-                if not CustomUser.objects.filter(email=email).exists():
-                    user = CustomUser.objects.create_user(
+                if not User.objects.filter(email=email).exists():
+                    user = User.objects.create_user(
                         username=username,
                         email=email,
                         password='testpassword',
@@ -56,8 +56,8 @@ class Command(BaseCommand):
             
             # Always create a superuser for admin access if it doesn't exist
             admin_email = 'admin@example.com'
-            if not CustomUser.objects.filter(email=admin_email).exists():
-                CustomUser.objects.create_superuser(
+            if not User.objects.filter(email=admin_email).exists():
+                User.objects.create_superuser(
                     username='admin',
                     email=admin_email,
                     password='testpassword',

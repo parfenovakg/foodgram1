@@ -2,7 +2,7 @@ import random
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from recipes.models import Recipe, ShoppingCart
-from users.models import CustomUser
+from users.models import User
 
 
 class Command(BaseCommand):
@@ -29,7 +29,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'Creating test shopping cart items (min: {min_items}, max: {max_items} per user)...'))
 
         # Get all users and recipes
-        users = list(CustomUser.objects.all())
+        users = list(User.objects.all())
         recipes = list(Recipe.objects.all())
         
         if not users:

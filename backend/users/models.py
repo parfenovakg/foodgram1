@@ -4,7 +4,7 @@ from django.db import models
 from foodgram.const import MAX_LENGTH_NAME
 
 
-class CustomUser(AbstractUser):
+class User(AbstractUser):
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=MAX_LENGTH_NAME)
     last_name = models.CharField(max_length=MAX_LENGTH_NAME)
@@ -19,12 +19,12 @@ class CustomUser(AbstractUser):
 
 class Follow(models.Model):
     user = models.ForeignKey(
-        CustomUser,
+        User,
         related_name='follows',
         on_delete=models.CASCADE
     )
     author = models.ForeignKey(
-        CustomUser,
+        User,
         related_name='following',
         on_delete=models.CASCADE
     )

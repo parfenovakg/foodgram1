@@ -10,9 +10,9 @@ from rest_framework.response import Response
 
 from djoser.views import UserViewSet as DjoserUserViewSet
 
-from .models import CustomUser, Follow
+from .models import User, Follow
 from .serializers import (
-    CustomUserSerializer,
+    UserSerializer,
     FollowCreateSerializer,
     PublicUserSerializer,
     SubscriptionSerializer,
@@ -33,13 +33,13 @@ class AvatarSerializer(serializers.ModelSerializer):
     avatar = Base64ImageField(required=False, allow_null=True)
 
     class Meta:
-        model = CustomUser
+        model = User
         fields = ('avatar',)
 
 
 class UserViewSet(DjoserUserViewSet):
-    queryset = CustomUser.objects.all().order_by('id')
-    serializer_class = CustomUserSerializer
+    queryset = User.objects.all().order_by('id')
+    serializer_class = UserSerializer
 
     def get_serializer_class(self):
         if self.action in ('list', 'retrieve', 'me'):
@@ -58,7 +58,6 @@ class UserViewSet(DjoserUserViewSet):
     )
     def me(self, request):
         return super().me(request)
-
 
     @action(detail=True, methods=['post'],
             permission_classes=[IsAuthenticated])
@@ -89,7 +88,7 @@ class UserViewSet(DjoserUserViewSet):
     @action(detail=False, methods=['get'],
             permission_classes=[AllowAny])
     def subscriptions(self, request):
-        authors = CustomUser.objects.filter(
+        authors = User.objects.filter(
             following__user=request.user).distinct()
         page = self.paginate_queryset(authors)
         serializer = SubscriptionSerializer(

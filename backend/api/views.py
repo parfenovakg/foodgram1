@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from djoser.views import UserViewSet as DjoserUserViewSet
+from djoser.views import UserViewSet
 
 from users.models import User, Follow
 from recipes.models import (
@@ -42,7 +42,7 @@ class Base64ImageField(serializers.ImageField):
         return super().to_internal_value(data)
 
 
-class UserViewSet(DjoserUserViewSet):
+class UserViewSet(UserViewSet):
     queryset = User.objects.all().order_by('id')
     serializer_class = UserSerializer
 
@@ -200,6 +200,5 @@ class RecipeViewSet(viewsets.ModelViewSet):
         response = HttpResponse(content,
                                 content_type='text/plain; charset=utf-8')
         response['Content-Disposition'] = (
-            'attachment; filename="shopping_list.txt"'
-        )
+            'attachment; filename="shopping_list.txt"')
         return response

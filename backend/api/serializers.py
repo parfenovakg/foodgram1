@@ -277,9 +277,15 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        validated_data.pop('tags', None)
-        validated_data.pop('ingredients', None)
-        return super().update(instance, validated_data)
+        tags = validated_data.pop('tags')
+        ingredients = validated_data.pop('ingredients')
+
+        instance = super().update(instance, validated_data)
+        instance.tags.set(tags)
+        instance.recipe_ingredients.all().delete()
+        self._set_m2m(instance, instance.tags.all(), ingredients)
+
+        return instance
 
     def to_representation(self, instance):
         return RecipeReadSerializer(instance, context=self.context).data
@@ -307,15 +313,10 @@ class FavoriteSerializer(serializers.ModelSerializer):
         return attrs
 
     def to_representation(self, instance):
-        recipe = instance.recipe
-        return {
-            'id': recipe.id,
-            'name': recipe.name,
-            'image': self.context['request'].build_absolute_uri(
-                recipe.image.url
-            ) if recipe.image else None,
-            'cooking_time': recipe.cooking_time
-        }
+        return RecipeMinSerializer(
+            instance.recipe,
+            context=self.context
+        ).data
 
 
 class ShoppingCartSerializer(serializers.ModelSerializer):
@@ -336,12 +337,7 @@ class ShoppingCartSerializer(serializers.ModelSerializer):
         return attrs
 
     def to_representation(self, instance):
-        recipe = instance.recipe
-        return {
-            'id': recipe.id,
-            'name': recipe.name,
-            'image': self.context['request'].build_absolute_uri(
-                recipe.image.url
-            ) if recipe.image else None,
-            'cooking_time': recipe.cooking_time
-        }
+        return RecipeMinSerializer(
+            instance.recipe,
+            context=self.context
+        ).data

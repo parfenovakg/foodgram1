@@ -76,6 +76,9 @@ services:
       - frontend_static:/frontend
       - ../backend/media:/media
       - ./nginx.conf:/etc/nginx/nginx.conf
+      - ../docs/:/usr/share/nginx/html/api/docs/
+      - ../docs/redoc.html:/usr/share/nginx/html/api/docs/redoc.html
+      - ../docs/openapi-schema.yml:/usr/share/nginx/html/api/docs/openapi-schema.yml
 
 volumes:
   pg_data:

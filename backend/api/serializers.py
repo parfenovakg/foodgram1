@@ -3,7 +3,6 @@ import imghdr
 
 from django.core.files.base import ContentFile
 from django.db import transaction
-
 from rest_framework import serializers
 
 from users.models import User, Follow
@@ -38,14 +37,14 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'email', 'username',
-            'first_name', 'last_name', 'avatar', 'is_subscribed'
+            'first_name', 'last_name', 'is_subscribed'
         )
 
     def get_is_subscribed(self, obj):
         request = self.context.get('request')
         return bool(
-            request and request.user.is_authenticated and
-            Follow.objects.filter(user=request.user, author=obj).exists()
+            request and request.user.is_authenticated
+            and Follow.objects.filter(user=request.user, author=obj).exists()
         )
 
 
@@ -58,23 +57,6 @@ class RegisterUserSerializer(serializers.ModelSerializer):
         )
 
 
-class PublicUserSerializer(serializers.ModelSerializer):
-    is_subscribed = serializers.SerializerMethodField()
-
-    class Meta:
-        model = User
-        fields = (
-            'id', 'username', 'first_name',
-            'last_name', 'email', 'is_subscribed'
-        )
-
-    def get_is_subscribed(self, obj):
-        request = self.context.get('request')
-        if not request or request.user.is_anonymous:
-            return False
-        return Follow.objects.filter(user=request.user, author=obj).exists()
-
-
 # ─────────────────────────────────────────────────────────────
 #                     SUBSCRIPTIONS
 # ─────────────────────────────────────────────────────────────
@@ -85,12 +67,12 @@ class RecipeMinSerializer(serializers.ModelSerializer):
         fields = ('id', 'name', 'image', 'cooking_time')
 
 
-class SubscriptionSerializer(PublicUserSerializer):
+class SubscriptionSerializer(UserSerializer):
     recipes_count = serializers.SerializerMethodField()
     recipes = serializers.SerializerMethodField()
 
-    class Meta(PublicUserSerializer.Meta):
-        fields = PublicUserSerializer.Meta.fields + (
+    class Meta(UserSerializer.Meta):
+        fields = UserSerializer.Meta.fields + (
             'recipes_count', 'recipes'
         )
 
@@ -179,7 +161,7 @@ class IngredientInRecipeReadSerializer(serializers.ModelSerializer):
 
 class RecipeReadSerializer(serializers.ModelSerializer):
     tags = TagSerializer(many=True)
-    author = PublicUserSerializer(read_only=True)
+    author = UserSerializer(read_only=True)
     ingredients = IngredientInRecipeReadSerializer(
         source='recipe_ingredients',
         many=True
@@ -199,15 +181,16 @@ class RecipeReadSerializer(serializers.ModelSerializer):
     def get_is_favorited(self, obj):
         request = self.context.get('request')
         return bool(
-            request and request.user.is_authenticated and
-            Favorite.objects.filter(user=request.user, recipe=obj).exists()
+            request and request.user.is_authenticated
+            and Favorite.objects.filter(user=request.user, recipe=obj).exists()
         )
 
     def get_is_in_shopping_cart(self, obj):
         request = self.context.get('request')
         return bool(
-            request and request.user.is_authenticated and
-            ShoppingCart.objects.filter(user=request.user, recipe=obj).exists()
+            request and request.user.is_authenticated
+            and ShoppingCart.objects.filter(user=request.user,
+                                            recipe=obj).exists()
         )
 
 

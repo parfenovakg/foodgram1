@@ -5,12 +5,10 @@ from django.core.files.base import ContentFile
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.db.models import Sum, F
-
 from rest_framework import viewsets, status, serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
-
 from djoser.views import UserViewSet
 
 from users.models import User, Follow
@@ -18,7 +16,7 @@ from recipes.models import (
     Recipe, Tag, Ingredient, Favorite, ShoppingCart, RecipeIngredient
 )
 from api.serializers import (
-    UserSerializer, FollowCreateSerializer, PublicUserSerializer,
+    UserSerializer, FollowCreateSerializer,
     SubscriptionSerializer,
     RecipeReadSerializer, RecipeWriteSerializer,
     ShoppingCartSerializer, TagSerializer,
@@ -48,7 +46,7 @@ class UserViewSet(UserViewSet):
 
     def get_serializer_class(self):
         if self.action in ('list', 'retrieve', 'me'):
-            return PublicUserSerializer
+            return UserSerializer
         return super().get_serializer_class()
 
     def get_permissions(self):
